@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Join a household</title>
+</head>
+<body>
+    <main>
+        <h1>Join a household</h1>
+
+        {% if messages %}
+            {% for message in messages %}
+                <p role="status">{{ message }}</p>
+            {% endfor %}
+        {% endif %}
+
+        <form method="post">
+            {% csrf_token %}
+            {{ form.non_field_errors }}
+
+            <p>
+                {{ form.invite_code.label_tag }}
+                {{ form.invite_code }}
+                {{ form.invite_code.errors }}
+            </p>
+            <p>
+                {{ form.display_name.label_tag }}
+                {{ form.display_name }}
+                {{ form.display_name.errors }}
+            </p>
+            <button type="submit">Join household</button>
+        </form>
+    </main>
+</body>
+</html>
