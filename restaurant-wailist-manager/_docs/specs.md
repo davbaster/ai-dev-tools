@@ -444,7 +444,7 @@ The following items should be confirmed before implementation:
 2. Whether closing the restaurant blocks adding new parties. This spec currently assumes yes.
 3. Exact seating preference values and whether each table may support more than one preference.
 4. Phone-number format and normalization rules by country/region.
-5. Whether a table becomes available automatically when a seated party is marked complete. The MVP has no separate `completed` action; table-release behavior must therefore be defined before implementation.
+5. Table release behavior: Implemented via explicit turnover action `POST /api/tables/{table_id}/release/` and `TableAssignment` records. Releasing a table clears the table's occupied state while keeping the seated entry in current-day history. See `_docs/table-release-spec.md`.
 6. Whether managers can edit or delete current-day entries. This spec currently treats seated and cancelled entries as read-only.
 7. Whether the first manager account is seeded administratively or created through an initial setup flow.
 8. Whether same-day history should be archived, deleted, or retained in the database but hidden after the day ends.

@@ -14,9 +14,10 @@ ENV/
 .env.*
 !.env.example
 
-# Django
+# Django & SQLite
 *.sqlite3
 db.sqlite3
+*.db
 staticfiles/
 media/
 
