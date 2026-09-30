@@ -28,7 +28,7 @@ uv run uvicorn app.main:app --reload --port 8000
 - **Interactive Swagger Docs**: <http://localhost:8000/docs>
 - **ReDoc**: <http://localhost:8000/redoc>
 
-The backend persists data using SQLAlchemy 2.0 with a database-agnostic architecture. By default, it initializes a local SQLite database (`hostboard.db`) populated with development seed data (tables, sample waitlist entries, and demo staff accounts). You can override this with any SQL database connection by setting the `DATABASE_URL` environment variable (e.g., PostgreSQL, MySQL).
+The backend persists data with SQLAlchemy. By default, it initializes `backend/hostboard.db`, a local SQLite database populated with development seed data (tables, sample waitlist entries, and demo staff accounts). `DATABASE_URL` can select another SQLAlchemy database, provided its driver is installed and supported by the current code.
 
 ---
 
@@ -94,17 +94,17 @@ Click **"Settings"** in the sidebar (visible only when logged in as Manager):
 
 ## Running the Tests
 
-Three automated test suites are available to verify that both frontend and backend are working correctly:
+Four automated verification suites are available. Run the relevant suite for your change, or all four for a full check:
 
 ### 1. Backend Tests (Pytest)
-Tests API endpoints, session authentication, role permissions, transactional seating, table release, database engine configuration, foreign key constraints, persistence, and CORS headers:
+Tests API endpoints, session authentication, role permissions, seating and table release, database behavior, and CORS headers. Tests use isolated stores; do not configure them to use a development database containing data you need:
 ```powershell
 cd .\restaurant-wailist-manager\backend
 uv run pytest
 ```
 
 ### 2. Frontend Unit Tests (Node Test Runner)
-Tests camelCase/snake_case data mappers, payload formatting, session storage, and API error parsing:
+Tests API field mapping, payload formatting, session handling, and API error parsing:
 ```powershell
 cd .\restaurant-wailist-manager\frontend
 npm test
@@ -116,3 +116,21 @@ Starts a live FastAPI server and exercises real HTTP requests through the fronte
 cd .\restaurant-wailist-manager
 node test-connection.mjs
 ```
+
+### 4. Agent Relay API and PostgreSQL Integration Test
+This opt-in test registers two uniquely named agents, sends and completes a task through the live Agent Relay HTTP API, then checks the persisted agent, task, and attempt records in PostgreSQL. It adds test records and does not clear or reset the live database.
+
+Start Agent Relay and make its API and PostgreSQL reachable locally. With the local kind cluster selected, run these commands in separate terminals:
+
+```powershell
+kubectl -n agent-relay port-forward service/agent-relay 8001:8000
+kubectl -n agent-relay port-forward service/postgres 15432:5432
+```
+
+From the `ai-dev-tools` repository root, run the test using Agent Relay's Python environment (which includes `psycopg`):
+
+```powershell
+uv run --project .\agent-relay pytest -p no:cacheprovider .\restaurant-wailist-manager\backend\tests\test_agent_relay_integration.py
+```
+
+By default, the test connects to `http://127.0.0.1:8001` and `postgresql+psycopg://relay:relay-local-only@127.0.0.1:15432/agent_relay`, matching the local kind setup. If these default endpoints are unavailable, pytest skips the test. Set `AGENT_RELAY_INTEGRATION_BASE_URL` and/or `AGENT_RELAY_INTEGRATION_DATABASE_URL` to override them; when either is explicitly set, connection failures fail the test instead of skipping. The test performs real writes, so use a development Agent Relay database.

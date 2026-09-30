@@ -1,200 +1,91 @@
-# AGENTS.md — HostBoard (Restaurant Waitlist Manager)
+# HostBoard agent guide
 
-This document provides context, technical specifications, domain rules, operational commands, and coding guidelines for AI agents (such as Google Antigravity, OpenAI Codex, Anthropic Claude) working in this repository.
+HostBoard is a single-restaurant waitlist and floor-management app for staff. Read this file first, then consult `_docs/specs.md` for product behavior and the code for the current implementation. Keep the documentation aligned with the running implementation; if a spec conflicts with code or the user’s current request, call out the mismatch and follow the explicitly approved direction.
 
----
+## Project layout
 
-## 1. Project Overview
+- `backend/app/main.py`: FastAPI routes, request/response schemas, authentication, permissions, and app setup.
+- `backend/app/store.py`: SQLAlchemy-backed domain operations and the test store.
+- `backend/app/models.py`, `backend/app/database.py`: ORM models, engine configuration, sessions, and SQLite setup.
+- `backend/tests/`: backend API, database, and frontend-contract tests.
+- `frontend/src/api/backendApi.js`: centralized HTTP client and snake_case/camelCase mapping. Keep backend calls here.
+- `frontend/src/App.jsx`, `main.jsx`, `styles.css`: application UI and styling.
+- `frontend/src/api/backendApi.test.js`: frontend API client tests (Node test runner).
+- `_docs/specs.md`: product requirements and domain rules.
+- `_docs/backend-specs.md`: historical/recommended contract document. It currently describes a Django design; the implemented backend is FastAPI, so verify it against code before relying on its stack or implementation claims.
+- `test-connection.mjs`: live HTTP integration flow through the actual frontend API client.
 
-**HostBoard** is a real-time restaurant waitlist and floor management application designed for host stands and managers during live meal services.
+## Working approach
 
-### Core Capabilities
-- **Live Waitlist Queue**: First-in, first-served (FIFO) queue for walk-in parties. Supports party size, seating preference (Dining room, Patio, Bar), and operational notes (allergies, high chairs, celebrations).
-- **Floor & Table Assignment**: Tracks real-time table occupancy, matching party sizes with table capacities in active seating areas.
-- **Role-Based Access Control**:
-  - `host`: Operates the board (adds, edits, cancels, seats parties).
-  - `manager`: Full host capabilities plus room settings, table inventory CRUD, and staff account management.
-- **Service Day Scoping & History**: Differentiates active waiting parties from completed history (`seated` or `cancelled`) for the active service day.
+1. Inspect the relevant implementation and product spec before changing behavior. Follow an existing code path end to end (UI → `backendApi.js` → route → store/model) when working on a feature.
+2. Make the smallest coherent change and preserve established API shapes, authentication, and role checks. Put frontend network behavior and field mapping in `backendApi.js`, not components.
+3. Treat server-side validation and authorization as authoritative. UI affordances do not replace backend checks.
+4. Preserve unrelated working-tree edits. Do not reset or overwrite local databases or generated/user files as part of routine work.
+5. Use UTF-8 for edited files. Update user-facing docs when setup or behavior changes.
+6. Do not claim a check passed unless it was run. Run the relevant checks for the change; the commands below cover the full available verification suite.
 
----
+## Domain invariants
 
-## 2. Architecture & Technology Stack
+- Queue order is FIFO by server-side creation timestamp. Editing a waiting entry must not change its original position.
+- Only waiting entries may be edited, seated, or cancelled. Seated and cancelled entries stay in the service-day history.
+- A table must be active, available, and large enough before assignment. Prevent duplicate occupation and keep release behavior consistent with assignment history.
+- Duplicate normalized phone numbers are warnings, not a reason to reject a party.
+- When the restaurant is closed, reject new parties while allowing staff to manage existing entries.
+- Hosts perform service operations. Manager-only settings, table inventory, and staff administration must be enforced by the backend.
+- Do not allow disabling the last active manager or deactivating an occupied table.
 
-```
-restaurant-wailist-manager/
-├── backend/                  # FastAPI (Python 3.13) + SQLAlchemy 2.0
-│   ├── app/
-│   │   ├── database.py       # Database-agnostic engine, sessionmaker, UTCDateTime, DATABASE_URL config
-│   │   ├── models.py         # SQLAlchemy ORM models (Restaurant, Area, Table, User, Entry, TableAssignment, UserSession)
-│   │   ├── main.py           # FastAPI routes, Pydantic schemas, auth cookies, CORS, session middleware
-│   │   └── store.py          # SQLAlchemyStore domain store & in-memory MockStore for testing
-│   ├── tests/
-│   │   ├── test_api.py       # API unit tests (auth, permissions, status transitions)
-│   │   ├── test_database.py  # Database engine, persistence, foreign keys, transactions, FIFO ordering
-│   │   └── test_frontend_integration.py # CORS preflight & frontend API contract flows
-│   └── pyproject.toml        # uv package configuration & dependencies
-├── frontend/                 # React 19 + Vite 8
-│   ├── src/
-│   │   ├── api/
-│   │   │   ├── backendApi.js # Centralized HTTP client, camelCase <-> snake_case mappers
-│   │   │   └── backendApi.test.js # Frontend unit tests (Node test runner)
-│   │   ├── App.jsx           # Main UI shell, views, modals, and mutation flows
-│   │   ├── main.jsx          # React DOM entry point
-│   │   └── styles.css        # Modular design system styling
-│   ├── vite.config.js        # Vite dev server with proxy to backend (:8000)
-│   └── package.json          # Node dependencies & test scripts
-├── _docs/                    # Product and technical specifications
-│   ├── specs.md              # Functional specifications
-│   └── backend-specs.md      # Detailed backend API contract & architecture spec
-├── test-connection.mjs       # Live end-to-end HTTP integration test runner
-└── README.md                 # Human-facing quickstart & documentation
-```
+## Setup and run (PowerShell)
 
-### Stack Details
-- **Backend**: FastAPI, SQLAlchemy 2.0, Pydantic v2, `pwdlib[argon2]`, `uvicorn`, managed via `uv`.
-- **Database**: Database-agnostic persistence layer using SQLAlchemy ORM. Configurable via `DATABASE_URL` environment variable (defaults to SQLite `sqlite:///./hostboard.db`; supports PostgreSQL, MySQL, and other SQL dialects without code changes).
-- **Frontend**: React 19, Lucide React icons, Vite 8, native ES modules.
-- **Authentication**: HTTP-only session cookies (`hostboard_session`) backed by persistent database sessions in `user_sessions` table.
-- **CORS & Proxying**:
-  - Backend allows origins `http://localhost:5173` and `http://127.0.0.1:5173` with credentials.
-  - Frontend dev server proxies `/api` requests to `http://localhost:8000`.
+Backend, from `restaurant-wailist-manager/backend`:
 
----
-
-## 3. Environment Setup & Run Commands
-
-All commands below assume execution from the workspace root (`c:\DATA\Cursos\ai-dev-tools`) or inside `restaurant-wailist-manager`.
-
-### Backend
 ```powershell
-cd .\restaurant-wailist-manager\backend
 uv sync --dev
 uv run uvicorn app.main:app --reload --port 8000
 ```
-- API Docs (Swagger): <http://localhost:8000/docs>
-- Openapi Schema: <http://localhost:8000/openapi.json>
 
-### Frontend
+Frontend, in a separate terminal from `restaurant-wailist-manager/frontend`:
+
 ```powershell
-cd .\restaurant-wailist-manager\frontend
 npm install
 npm run dev
 ```
-- Local Application: <http://localhost:5173/>
 
----
+Open <http://localhost:5173/>. The frontend proxies `/api` to the backend; API docs are at <http://localhost:8000/docs>.
 
-## 4. Test Suites & Verification
+`DATABASE_URL` selects the backend database. Without it, the app uses SQLite at `backend/hostboard.db`. The app creates its schema and seeds development data during setup. Backend tests use an isolated in-memory store; do not point them at a database whose data must be kept. The live integration script starts a test server and should be run with the local backend stopped if port 8000 is occupied.
 
-Always run all three test suites before submitting or finalizing any code changes:
+## Verification commands
 
-### 1. Backend Pytest
-Verifies status transitions, authentication, authorization, validation, FIFO ordering, and CORS headers:
+Run checks relevant to the change. Full suite:
+
 ```powershell
+# Backend
 cd .\restaurant-wailist-manager\backend
 uv run pytest
-```
 
-### 2. Frontend Unit Tests (Node Test Runner)
-Tests API client mappers, payload transformation, session handling, and structured error parsing:
-```powershell
-cd .\restaurant-wailist-manager\frontend
+# Frontend API client
+cd ..\frontend
 npm test
-```
 
-### 3. Live End-to-End HTTP Integration Test
-Spins up a live FastAPI test server on an isolated port and exercises full host and manager workflows using the actual `backendApi.js` client over the network:
-```powershell
-cd .\restaurant-wailist-manager
+# Live HTTP integration (from project root)
+cd ..
 node test-connection.mjs
 ```
 
----
+The integration script uses a real HTTP server and exercises host/manager workflows. Inspect its setup before running if your local port or environment has special constraints.
 
-## 5. Domain Rules & Invariants
+### Agent Relay live API and PostgreSQL integration
 
-When implementing or modifying features, agents **must strictly preserve** these invariants:
+`backend/tests/test_agent_relay_integration.py` is a separate opt-in check against a running Agent Relay and its real PostgreSQL database. It registers two uniquely named agents, exchanges and completes a task, and verifies the saved agent/task/attempt rows and hashed claim token. It adds records and does not reset the database. Run it from the `ai-dev-tools` repository root with Agent Relay's environment, which supplies `httpx`, SQLAlchemy, and `psycopg`:
 
-1. **FIFO Position Invariance**:
-   - Queue position is determined strictly by the server-side `created_at` timestamp.
-   - Editing party details (`PATCH /api/waitlist/{id}/`) **must not** modify `created_at` or change the party's position in line.
-2. **Terminal State Immutability**:
-   - Only `waiting` parties can be edited, seated, or cancelled.
-   - Once an entry is `seated` or `cancelled`, it is immutable. Any attempt to modify or transition it must return `409 invalid_status_transition`.
-3. **Table Seating Rules**:
-   - A table can be assigned to a party only if:
-     - `table.is_active == True`
-     - Table is not already occupied (`table.id not in occupied_table_ids`)
-     - `table.capacity >= party.party_size` (violating this returns `409 table_too_small`).
-   - If already occupied or inactive, return `409 table_unavailable`.
-4. **Duplicate Phone Detection**:
-   - Phone numbers are normalized to numeric digits for matching (`phone_normalized`).
-   - Duplicate phone numbers within the current service day produce a warning (`duplicate_phone`), but **do not block** the request.
-5. **Restaurant Closed Status**:
-   - When `restaurant.is_open == False`, new entries (`POST /api/waitlist/`) must be rejected with `409 restaurant_closed`.
-   - Viewing the board, updating existing waiting parties, seating, and cancellations remain allowed while closed.
-6. **Table Release & Turnover**:
-   - Both **hosts** and **managers** can mark an occupied table as free via `POST /api/tables/{table_id}/release/`.
-   - Releasing a table closes the active `TableAssignment` (`released_at = utc_now()`) and returns the table to `available`.
-   - The waitlist entry remains in `seated` status in today's completed history (it is not put back into the queue).
-   - Releasing an unoccupied table must return `409 table_not_occupied`.
-7. **Manager Invariants**:
-   - At least one active manager must exist at all times. Disabling the last active manager must return `409 last_manager_required`.
-   - Occupied tables cannot be deactivated (`409 table_occupied`).
-   - Table names must be unique case-insensitively (`409 duplicate_table_name`).
-
----
-
-## 6. API & Data Contract Conventions
-
-The frontend and backend use differing naming conventions. All transformations are encapsulated in `frontend/src/api/backendApi.js`:
-
-| Concept | Backend Field (`snake_case`) | Frontend Field (`camelCase`) |
-|---|---|---|
-| Waitlist Entry | `guest_name` | `guestName` |
-| | `party_size` | `partySize` |
-| | `seating_preference` | `seatingPreference` (null mapped to `'No preference'`) |
-| | `created_at` | `createdAt` |
-| | `assigned_table_id` | `assignedTableId` |
-| | `created_by` | `createdBy` |
-| Table | `area_id` | `areaId` |
-| | `is_active` | `isActive` |
-| | `availability` | `availability` (`'available'`, `'occupied'`, `'inactive'`) |
-| Restaurant | `is_open` | `isOpen` |
-| | `service_label` | `serviceLabel` |
-| User | `is_active` | `isActive` |
-
-### Error Response Contract
-Backend errors must adhere to this predictable structure:
-```json
-{
-  "error": {
-    "code": "validation_error",
-    "message": "Review the highlighted fields.",
-    "fields": {
-      "phone": ["Phone number must be at least 7 digits."]
-    }
-  }
-}
+```powershell
+kubectl -n agent-relay port-forward service/agent-relay 8001:8000
+kubectl -n agent-relay port-forward service/postgres 15432:5432
+uv run --project .\agent-relay pytest -p no:cacheprovider .\restaurant-wailist-manager\backend\tests\test_agent_relay_integration.py
 ```
 
----
+Run the two `kubectl port-forward` commands in separate terminals and execute pytest in a third. The test defaults to API `http://127.0.0.1:8001` and database `postgresql+psycopg://relay:relay-local-only@127.0.0.1:15432/agent_relay`, matching the local kind manifests. With no environment overrides, it skips if either local service is unavailable. Override either endpoint with `AGENT_RELAY_INTEGRATION_BASE_URL` or `AGENT_RELAY_INTEGRATION_DATABASE_URL`; explicitly configured endpoints are required to work or the test fails. Keep this live-data test separate from the backend unit suite and point it only at a development Relay database.
 
-## 7. Demo Accounts & Seed Data
+## Current account examples
 
-Development seeds are defined in `backend/app/store.py`:
-
-| Role | Name | Email (Identifier) | Password | Access Scope |
-|---|---|---|---|---|
-| **Manager** | Maya Chen | `maya@juneandpine.com` | `demo1234` | Full access (waitlist, tables, settings, staff) |
-| **Host** | Luca Rivera | `luca@juneandpine.com` | `demo1234` | Waitlist operations only |
-| **Host** | Nora Bell | `nora@juneandpine.com` | `demo1234` | Waitlist operations only |
-
----
-
-## 8. Development Guidelines for Agents
-
-- **File Encoding**: Always ensure new or modified files are saved in standard **UTF-8** (avoid UTF-16LE / BOM).
-- **Backend Storage**: The backend uses a database-agnostic persistence layer built with SQLAlchemy 2.0 (`app/store.py`, `app/models.py`, `app/database.py`). It connects to SQLite by default (`hostboard.db`) and supports any relational SQL engine via `DATABASE_URL`. Testing uses `MockStore`, an isolated in-memory SQLite store with `StaticPool` that resets schema and seed data cleanly on each test run.
-- **Frontend State**: The UI reads session info from `backendApi.getSession()` and refreshes dashboard data via `api.getDashboard()` after mutations. Keep API interactions centralized within `backendApi.js`.
-- **Pre-commit Checks**: Run `npm test`, `uv run pytest`, and `node test-connection.mjs` before concluding any feature or bug fix.
+Development seed accounts are maintained in `backend/app/store.py`. At the time this guide was written, the README lists Maya Chen (`maya@juneandpine.com`) as manager and Luca Rivera / Nora Bell as hosts, all with the demo password `demo1234`. Confirm the seed implementation before changing or relying on credentials.
