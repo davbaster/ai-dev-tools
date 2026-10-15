@@ -1,0 +1,473 @@
+openapi: 3.1.0
+info:
+  title: HostBoard API
+  version: 0.1.0
+  description: Staff-only restaurant waitlist API backed by a replaceable mock store.
+servers:
+  - url: http://localhost:8000
+    description: Local development server
+security:
+  - cookieAuth: []
+tags:
+  - name: Authentication
+  - name: Dashboard
+  - name: Waitlist
+  - name: Tables
+  - name: Restaurant settings
+  - name: Staff
+paths:
+  /api/auth/login/:
+    post:
+      tags: [Authentication]
+      operationId: login
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/LoginRequest' }
+      responses:
+        '200':
+          description: Authenticated staff user.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [user]
+                properties:
+                  user: { $ref: '#/components/schemas/User' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /api/auth/session/:
+    get:
+      tags: [Authentication]
+      operationId: getSession
+      responses:
+        '200':
+          description: Current authenticated user.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [user]
+                properties:
+                  user: { $ref: '#/components/schemas/User' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /api/auth/logout/:
+    post:
+      tags: [Authentication]
+      operationId: logout
+      responses:
+        '204': { description: Session invalidated. }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /api/dashboard/:
+    get:
+      tags: [Dashboard]
+      operationId: getDashboard
+      parameters:
+        - name: service_date
+          in: query
+          schema: { type: string, format: date }
+        - name: include
+          in: query
+          schema: { type: string, enum: [users] }
+      responses:
+        '200':
+          description: Current service dashboard.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Dashboard' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /api/waitlist/:
+    post:
+      tags: [Waitlist]
+      operationId: createWaitlistEntry
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PartyWrite' }
+      responses:
+        '201':
+          description: Waiting party created.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MutationResult' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+  /api/waitlist/{entry_id}/:
+    patch:
+      tags: [Waitlist]
+      operationId: updateWaitlistEntry
+      parameters:
+        - { $ref: '#/components/parameters/EntryId' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PartyPatch' }
+      responses:
+        '200':
+          description: Waiting party updated.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MutationResult' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /api/waitlist/{entry_id}/cancel/:
+    post:
+      tags: [Waitlist]
+      operationId: cancelWaitlistEntry
+      parameters:
+        - { $ref: '#/components/parameters/EntryId' }
+      responses:
+        '200':
+          description: Party cancelled.
+          content:
+            application/json:
+              schema: { type: object, required: [entry], properties: { entry: { $ref: '#/components/schemas/WaitlistEntry' } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /api/waitlist/{entry_id}/seat/:
+    post:
+      tags: [Waitlist]
+      operationId: seatWaitlistEntry
+      parameters:
+        - { $ref: '#/components/parameters/EntryId' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SeatRequest' }
+      responses:
+        '200':
+          description: Party seated.
+          content:
+            application/json:
+              schema: { type: object, required: [entry], properties: { entry: { $ref: '#/components/schemas/WaitlistEntry' } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /api/tables/:
+    get:
+      tags: [Tables]
+      operationId: listTables
+      responses:
+        '200':
+          description: Table inventory with current availability.
+          content:
+            application/json:
+              schema: { type: object, required: [tables], properties: { tables: { type: array, items: { $ref: '#/components/schemas/Table' } } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+    post:
+      tags: [Tables]
+      operationId: createTable
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/TableWrite' }
+      responses:
+        '201':
+          description: Table created.
+          content:
+            application/json:
+              schema: { type: object, required: [table], properties: { table: { $ref: '#/components/schemas/Table' } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /api/tables/{table_id}/:
+    patch:
+      tags: [Tables]
+      operationId: updateTable
+      parameters:
+        - { $ref: '#/components/parameters/TableId' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/TablePatch' }
+      responses:
+        '200':
+          description: Table updated.
+          content:
+            application/json:
+              schema: { type: object, required: [table], properties: { table: { $ref: '#/components/schemas/Table' } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /api/settings/restaurant/:
+    get:
+      tags: [Restaurant settings]
+      operationId: getRestaurantSettings
+      responses:
+        '200':
+          description: Restaurant settings.
+          content:
+            application/json:
+              schema: { type: object, required: [restaurant], properties: { restaurant: { $ref: '#/components/schemas/Restaurant' } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+    patch:
+      tags: [Restaurant settings]
+      operationId: updateRestaurantSettings
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RestaurantPatch' }
+      responses:
+        '200':
+          description: Settings updated.
+          content:
+            application/json:
+              schema: { type: object, required: [restaurant], properties: { restaurant: { $ref: '#/components/schemas/Restaurant' } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /api/staff/:
+    get:
+      tags: [Staff]
+      operationId: listStaff
+      responses:
+        '200':
+          description: Staff accounts.
+          content:
+            application/json:
+              schema: { type: object, required: [users], properties: { users: { type: array, items: { $ref: '#/components/schemas/User' } } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    post:
+      tags: [Staff]
+      operationId: createStaff
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/StaffWrite' }
+      responses:
+        '201':
+          description: Staff account created.
+          content:
+            application/json:
+              schema: { type: object, required: [user], properties: { user: { $ref: '#/components/schemas/User' } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /api/staff/{user_id}/status/:
+    post:
+      tags: [Staff]
+      operationId: updateStaffStatus
+      parameters:
+        - { $ref: '#/components/parameters/UserId' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [is_active]
+              properties: { is_active: { type: boolean } }
+      responses:
+        '200':
+          description: Staff status updated.
+          content:
+            application/json:
+              schema: { type: object, required: [user], properties: { user: { $ref: '#/components/schemas/User' } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /api/staff/{user_id}/password-reset/:
+    post:
+      tags: [Staff]
+      operationId: resetStaffPassword
+      parameters:
+        - { $ref: '#/components/parameters/UserId' }
+      responses:
+        '204': { description: Password reset requested. }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+components:
+  securitySchemes:
+    cookieAuth:
+      type: apiKey
+      in: cookie
+      name: hostboard_session
+  parameters:
+    EntryId:
+      name: entry_id
+      in: path
+      required: true
+      schema: { type: string }
+    TableId:
+      name: table_id
+      in: path
+      required: true
+      schema: { type: string }
+    UserId:
+      name: user_id
+      in: path
+      required: true
+      schema: { type: string }
+  schemas:
+    User:
+      type: object
+      required: [id, name, identifier, role, is_active]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        identifier: { type: string, format: email }
+        role: { type: string, enum: [host, manager] }
+        is_active: { type: boolean }
+    Restaurant:
+      type: object
+      required: [id, name, is_open, timezone, service_label]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        is_open: { type: boolean }
+        timezone: { type: string }
+        service_label: { type: string }
+    Area:
+      type: object
+      required: [id, name, is_active]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        is_active: { type: boolean }
+    Table:
+      type: object
+      required: [id, name, capacity, area_id, is_active, availability]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        capacity: { type: integer, minimum: 1 }
+        area_id: { type: string, nullable: true }
+        is_active: { type: boolean }
+        availability: { type: string, enum: [available, occupied, inactive] }
+    WaitlistEntry:
+      type: object
+      required: [id, guest_name, phone, party_size, status, created_at]
+      properties:
+        id: { type: string }
+        guest_name: { type: string }
+        phone: { type: string }
+        party_size: { type: integer, minimum: 1 }
+        seating_preference: { type: string, nullable: true }
+        notes: { type: string, nullable: true }
+        status: { type: string, enum: [waiting, seated, cancelled] }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time, nullable: true }
+        seated_at: { type: string, format: date-time, nullable: true }
+        cancelled_at: { type: string, format: date-time, nullable: true }
+        assigned_table_id: { type: string, nullable: true }
+        created_by: { type: string, nullable: true }
+        completed_by: { type: string, nullable: true }
+    Dashboard:
+      type: object
+      required: [restaurant, service_day, areas, tables, entries, users]
+      properties:
+        restaurant: { $ref: '#/components/schemas/Restaurant' }
+        service_day:
+          type: object
+          required: [id, date]
+          properties:
+            id: { type: string }
+            date: { type: string, format: date }
+        areas: { type: array, items: { $ref: '#/components/schemas/Area' } }
+        tables: { type: array, items: { $ref: '#/components/schemas/Table' } }
+        entries: { type: array, items: { $ref: '#/components/schemas/WaitlistEntry' } }
+        users: { type: array, items: { $ref: '#/components/schemas/User' } }
+    LoginRequest:
+      type: object
+      required: [identifier, password]
+      properties:
+        identifier: { type: string }
+        password: { type: string, format: password }
+    PartyWrite:
+      type: object
+      required: [guest_name, phone, party_size, seating_preference]
+      properties:
+        guest_name: { type: string, minLength: 1, maxLength: 120 }
+        phone: { type: string, minLength: 7, maxLength: 40 }
+        party_size: { type: integer, minimum: 1 }
+        seating_preference: { type: string, nullable: true }
+        notes: { type: string, maxLength: 500, nullable: true }
+    PartyPatch:
+      allOf:
+        - $ref: '#/components/schemas/PartyWrite'
+      description: Partial update; supplied fields replace current values.
+    SeatRequest:
+      type: object
+      required: [table_id]
+      properties: { table_id: { type: string } }
+    MutationResult:
+      type: object
+      required: [entry, warnings]
+      properties:
+        entry: { $ref: '#/components/schemas/WaitlistEntry' }
+        warnings: { type: array, items: { type: object } }
+    TableWrite:
+      type: object
+      required: [name, capacity]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 20 }
+        capacity: { type: integer, minimum: 1 }
+        area_id: { type: string, nullable: true }
+    TablePatch:
+      type: object
+      properties:
+        name: { type: string, minLength: 1, maxLength: 20 }
+        capacity: { type: integer, minimum: 1 }
+        area_id: { type: string, nullable: true }
+        is_active: { type: boolean }
+    RestaurantPatch:
+      type: object
+      properties:
+        name: { type: string, minLength: 1, maxLength: 120 }
+        is_open: { type: boolean }
+        service_label: { type: string, minLength: 1, maxLength: 80 }
+    StaffWrite:
+      type: object
+      required: [name, identifier, role]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 120 }
+        identifier: { type: string, format: email }
+        role: { type: string, enum: [host, manager] }
+  responses:
+    Unauthorized:
+      description: Authentication required or invalid credentials.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    Forbidden:
+      description: Authenticated user lacks permission.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    NotFound:
+      description: Resource not found.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    Conflict:
+      description: State or concurrency conflict.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    ValidationError:
+      description: Request validation failed.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code: { type: string }
+            message: { type: string }
+            fields: { type: object, additionalProperties: { type: array, items: { type: string } } }
