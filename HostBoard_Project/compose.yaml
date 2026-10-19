@@ -1,0 +1,28 @@
+services:
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: hostboard
+      POSTGRES_USER: hostboard
+      POSTGRES_PASSWORD: hostboard
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U hostboard -d hostboard"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  app:
+    build: .
+    image: ${IMAGE_NAME:-hostboard}
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql+psycopg://hostboard:hostboard@db:5432/hostboard
+    ports:
+      - "${PORT:-8000}:8000"
+
+volumes:
+  postgres_data:

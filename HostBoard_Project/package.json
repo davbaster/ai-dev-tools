@@ -1,0 +1,17 @@
+{
+  "name": "final_project",
+  "version": "1.0.0",
+  "description": "HostBoard is a real-time waitlist and floor management application designed for restaurant host stands and managers. It provides a live queue, table occupancy tracking, role-based workflows, and service day history.",
+  "main": "index.js",
+  "scripts": {
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "devDependencies": {
+    "@playwright/test": "^1.64.1"
+  }
+}
